@@ -1,2 +1,2 @@
 # Spotify-Playlist-Downloader
- Small GUI application that can download a Spotify playlist.
+ A simple Spotify playlist downloader made in python

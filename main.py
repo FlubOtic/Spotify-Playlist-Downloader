@@ -1,23 +1,25 @@
-import tkinter as tk
+import tkinter as tk, sys
 from tkinter import ttk
-import urllib
-import time
-import os
-import re
-import sys
-import spotipy
-import pytube
-import validators
-import threading
+from urllib import error
+from validators import url
+from threading import Thread
+from os import rename, path
+from re import sub
+from pytube import exceptions, YouTube
+from spotipy import Spotify
 from spotipy.exceptions import SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
 from youtubesearchpython import VideosSearch
 
 # Spotify Credentials
-SPOTIPY_CLIENT_ID = "706faa895a0f45718209aec6c61a0a70"
-SPOTIPY_CLIENT_SECRET = "a915de3be77c44989562f2b41df62ef8"
-SPOTIPY_REDIRECT_URI = "http://localhost:8888/callback/"
+SPOTIPY_CLIENT_ID = "https://developer.spotify.com/dashboard/applications"
+SPOTIPY_CLIENT_SECRET = "https://developer.spotify.com/dashboard/applications"
+SPOTIPY_REDIRECT_URI = "https://developer.spotify.com/dashboard/applications"
 
+token = SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
+                    client_secret=SPOTIPY_CLIENT_SECRET,
+                    redirect_uri=SPOTIPY_REDIRECT_URI)
+sp = Spotify(auth_manager=token)
 
 SCREEN_WIDTH = 900
 SCREEN_HEIGHT = 265
@@ -32,19 +34,19 @@ def download_yt_vids(track_urls, download_path):
     text_entry["state"] = "disabled"
 
     for i, track in enumerate(track_urls):
-        current_track_name = re.sub(r"[\\/*?:'<>|]", "", track_names[i])
+        current_track_name = sub(r"[\\/*?:'<>|]", "", track_names[i])
 
-        if os.path.isfile(download_path + "\\" + current_track_name + ".mp3"):
+        if path.isfile(download_path + "\\" + current_track_name + ".mp3"):
             progress_bar["value"] += progress_bar_increase
             continue
         try:
-            out_file = pytube.YouTube(track).streams.first().download(download_path)
-        except (pytube.exceptions.RegexMatchError, urllib.error.HTTPError, ConnectionResetError) as e:
+            out_file = YouTube(track).streams.first().download(download_path)
+        except (exceptions.RegexMatchError, error.HTTPError, ConnectionResetError) as e:
             print(track)
             print(e)
             continue
 
-        os.rename(out_file, download_path + "\\" + current_track_name + ".mp3")
+        rename(out_file, download_path + "\\" + current_track_name + ".mp3")
         progress_bar["value"] += progress_bar_increase
 
     status_text["text"] = "Done, go to " + download_path
@@ -59,7 +61,7 @@ def is_valid_dir(download_path):
     global track_urls
     global is_loading
 
-    if not os.path.isdir(download_path):
+    if not path.isdir(download_path):
         status_text["text"] = "Error: Invalid Path"
         return
     else:
@@ -89,7 +91,7 @@ def get_yt_urls(track_names):
     status_text["text"] = "Where do you want to download your music?"
     text_entry["state"] = "normal"
     text_entry["background"] = "white"
-    window.focus_set()
+    root.focus_set()
     text_entry["foreground"] = "grey"
     text_entry.insert(0, "Enter Path Here")
     delete_entry_text = True
@@ -121,7 +123,7 @@ def is_valid_spotify_url(playlist_url):
     global is_asking_dir
     global is_loading
 
-    if not validators.url(str(playlist_url)):
+    if not url(str(playlist_url)):
         status_text["text"] = 'Error: Invalid URL, maybe you forgot to put "http://"'
         return
     else:
@@ -146,23 +148,23 @@ def is_valid_spotify_url(playlist_url):
 
 # Starts a thread separated from the window.mainloop()
 def button():
-    global is_asking_dir
-    global restart
-    global delete_entry_text
     global is_loading
+    global is_asking_dir
+    global delete_entry_text
+    global restart
 
     if not is_asking_dir and not restart:
         playlist_url_entry = text_entry.get()
-        program_thread = threading.Thread(target=is_valid_spotify_url, args=(playlist_url_entry,))
+        program_thread = Thread(target=is_valid_spotify_url, args=(playlist_url_entry,))
         program_thread.daemon = True
         program_thread.start()
     elif is_asking_dir and not restart:
-        dir_thread = threading.Thread(target=is_valid_dir, args=(text_entry.get(),))
+        dir_thread = Thread(target=is_valid_dir, args=(text_entry.get(),))
         dir_thread.daemon = True
         dir_thread.start()
     elif restart:
         text_entry["state"] = "normal"
-        window.focus_set()
+        root.focus_set()
         text_entry.insert(0, "Enter URL here")
         text_entry.config(foreground="grey")
         status_text["text"] = "Enter Your Spotify Playlist URL"
@@ -172,9 +174,9 @@ def button():
         delete_entry_text = True
         restart = False
 
-
 def handle_focus_in(_):
     global delete_entry_text
+
     if delete_entry_text:
         text_entry.delete(0, len(text_entry.get()))
         text_entry.config(foreground="white")
@@ -183,47 +185,47 @@ def handle_focus_in(_):
 
 def handle_focus_out(_):
     if _ != "Pass":
-        global is_asking_dir
+        return
 
 
 def handle_enter(txt):
-    global is_loading
     handle_focus_out("Pass")
     if not is_loading:
-        button()
+        submit_button.invoke()
+
 
 
 is_asking_dir = False
 restart = False
+track_names = []
+track_urls = []
 delete_entry_text = True
 is_loading = False
 
-track_names = []
-track_urls = []
+root = tk.Tk()
 
-window = tk.Tk()
-
-window.geometry(f"{SCREEN_WIDTH}x{SCREEN_HEIGHT}")
-window.resizable(False, False)
+root.geometry(f"{SCREEN_WIDTH}x{SCREEN_HEIGHT}")
+root.resizable(False, False)
 
 style = ttk.Style()
 
-window.tk.call("source", os.path.dirname(__file__) + "\\Azure\\azure-dark.tcl")
+root.tk.call("source", path.dirname(__file__) + "\\Azure\\azure-dark.tcl")
 
 style.theme_use("azure-dark")
 
 if getattr(sys, "frozen", False):
-    icon = os.path.dirname(sys.executable) + "\\Images\\Spotify Playlist To MP3 Icon.ico"
+    icon = path.dirname(sys.executable) + "\\Images\\Spotify Playlist To MP3 Icon.ico"
 elif __file__:
-    icon = os.path.dirname(__file__) + "\\Images\\Spotify Playlist To MP3 Icon.ico"
+    icon = path.dirname(__file__) + "\\Images\\Spotify Playlist To MP3 Icon.ico"
 
-window.iconbitmap(icon)
-window.title("Spotify Playlist Downloader")
+root.iconbitmap(icon)
+root.title("Spotify Playlist Downloader")
 
-instructions_text = ttk.Label(window, text="Spotify Playlist Downloader", font=("TkDefaultFont", 50))
+
+instructions_text = ttk.Label(root, text="Spotify Playlist Downloader", font=("TkDefaultFont", 50))
 instructions_text.pack()
 
-text_entry = ttk.Entry(window, width=50, font=("TkDefaultFont", 20), foreground="grey")
+text_entry = ttk.Entry(root, width=50, font=("TkDefaultFont", 20), foreground="grey")
 text_entry.insert(0, "Enter URL here")
 text_entry.pack(pady=7)
 
@@ -231,24 +233,15 @@ text_entry.bind("<FocusIn>", handle_focus_in)
 text_entry.bind("<FocusOut>", handle_focus_out)
 text_entry.bind("<Return>", handle_enter)
 
-status_text = ttk.Label(window, text="Enter Your Spotify Playlist URL", font=("TkDefaultFont", 20))
+status_text = ttk.Label(root, text="Enter Your Spotify Playlist URL", font=("TkDefaultFont", 20))
 status_text.pack()
 
 progress_bar = ttk.Progressbar(length=350)
 progress_bar.pack()
 
-submit_button = ttk.Button(window, text="Submit", width=15, command=lambda: button())
+submit_button = ttk.Button(root, text="Submit", width=15, command=lambda:button())
 submit_button.pack(pady=5, ipady=10)
-
-token = SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
-                     client_secret=SPOTIPY_CLIENT_SECRET,
-                     redirect_uri=SPOTIPY_REDIRECT_URI)
-sp = spotipy.Spotify(auth_manager=token)
-
-
-def main():
-    window.mainloop()
-
+    
 
 if __name__ == "__main__":
-    main()
+    root.mainloop()
